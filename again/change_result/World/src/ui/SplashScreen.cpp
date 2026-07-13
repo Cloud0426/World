@@ -51,10 +51,18 @@ void RenderBagScreen(UIResource& res, UIState& state, GameManager* game, int cur
 void HandleBagScreenInput(UIResource& res, UIState& state, int curW, int curH);
 void RenderTaskListScreen(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
 void HandleTaskListScreenInput(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
-void RenderRecruitScreen(UIResource& res, int curW, int curH);
-void HandleRecruitScreenInput(UIState& state);
+void RenderRecruitScreen(UIResource& res, UIState& state, int curW, int curH);
+void HandleRecruitScreenInput(UIState& state, GameManager* game, int curW, int curH);
 void RenderFriendsScreen(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
 void HandleFriendsScreenInput(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
+void RenderFighterDetailScreen(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
+void HandleFighterDetailScreenInput(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
+
+#include "FighterDetailScreen.cpp"
+
+
+
+
 void RenderStory1Screen(UIResource& res, int curW, int curH);
 void HandleStory1ScreenInput(UIResource& res, UIState& state, int curW, int curH);
 void RenderStory2Screen(UIResource& res, int curW, int curH);
@@ -62,6 +70,10 @@ void HandleStory2ScreenInput(UIState& state);
 void RenderCharacterFileScreen(UIResource& res, UIState& state, int curW, int curH);
 void HandleCharacterFileScreenInput(UIResource& res, UIState& state, int curW, int curH);
 void HandleCharacterFileKeyboardInput(UIResource& res, UIState& state, int curW, int curH);
+
+// BagDetail（背包物品详情弹窗）由 MiscScreens 提供
+void RenderBagDetailDialog(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
+void HandleBagDetailDialogInput(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
 
 // ============================================================
 // 统一输入处理（委托各界面模块）
@@ -99,8 +111,12 @@ static void HandleAllInput(UIResource& res, UIState& state, GameManager* game, i
             case SCREEN_MAIN:
                 HandleMainScreenInput(res, state, curW, curH);
                 break;
-            case SCREEN_BAG:
-                HandleBagScreenInput(res, state, curW, curH);
+                        case SCREEN_BAG:
+                if (state.bagShowDetail) {
+                    HandleBagDetailDialogInput(res, state, game, curW, curH);
+                } else {
+                    HandleBagScreenInput(res, state, curW, curH);
+                }
                 break;
             case SCREEN_TASK_LIST:
                 HandleTaskListScreenInput(res, state, game, curW, curH);
@@ -129,11 +145,14 @@ static void HandleAllInput(UIResource& res, UIState& state, GameManager* game, i
             case SCREEN_STORY2:
                 HandleStory2ScreenInput(state);
                 break;
-            case SCREEN_RECRUIT:
-                HandleRecruitScreenInput(state);
+                        case SCREEN_RECRUIT:
+                HandleRecruitScreenInput(state, game, curW, curH);
                 break;
-            case SCREEN_FRIENDS:
+                        case SCREEN_FRIENDS:
                 HandleFriendsScreenInput(res, state, game, curW, curH);
+                break;
+            case SCREEN_FIGHTER_DETAIL:
+                HandleFighterDetailScreenInput(res, state, game, curW, curH);
                 break;
             case SCREEN_CHARACTER_FILE:
                 HandleCharacterFileScreenInput(res, state, curW, curH);
@@ -180,8 +199,11 @@ static void HandleAllInput(UIResource& res, UIState& state, GameManager* game, i
                 state.showPeaceInB = false;
                 state.screenState = SCREEN_MAP_SUB2;
                 break;
-            case SCREEN_FRIENDS:
+                        case SCREEN_FRIENDS:
                 state.screenState = SCREEN_MAIN;
+                break;
+            case SCREEN_FIGHTER_DETAIL:
+                state.screenState = SCREEN_FRIENDS;
                 break;
             case SCREEN_RECRUIT:
                 state.screenState = SCREEN_MAIN;
@@ -209,8 +231,12 @@ static void RenderCurrentScreen(UIResource& res, UIState& state, GameManager* ga
         case SCREEN_MAIN:
             RenderMainScreen(res, state, curW, curH);
             break;
-        case SCREEN_BAG:
+                case SCREEN_BAG:
             RenderBagScreen(res, state, game, curW, curH);
+            // 背包物品详情弹窗（覆盖在背包界面之上）
+            if (state.bagShowDetail) {
+                RenderBagDetailDialog(res, state, game, curW, curH);
+            }
             break;
         case SCREEN_TASK_LIST:
             RenderTaskListScreen(res, state, game, curW, curH);
@@ -239,11 +265,14 @@ static void RenderCurrentScreen(UIResource& res, UIState& state, GameManager* ga
         case SCREEN_STORY2:
             RenderStory2Screen(res, curW, curH);
             break;
-        case SCREEN_RECRUIT:
-            RenderRecruitScreen(res, curW, curH);
+                case SCREEN_RECRUIT:
+            RenderRecruitScreen(res, state, curW, curH);
             break;
-        case SCREEN_FRIENDS:
+                case SCREEN_FRIENDS:
             RenderFriendsScreen(res, state, game, curW, curH);
+            break;
+        case SCREEN_FIGHTER_DETAIL:
+            RenderFighterDetailScreen(res, state, game, curW, curH);
             break;
         case SCREEN_CHARACTER_FILE:
             RenderCharacterFileScreen(res, state, curW, curH);

@@ -4,6 +4,10 @@
 #include "UIResource.h"
 #include "game/GameManager.h"
 #include "system/mission/TaskManager.h"
+#include "role/character/MainCharacter.h"
+#include "system/backpack/Inventory.h"
+#include "item/ItemTemplate.h"
+#include "system/recruit/RecruitSystem.h"
 #include <cstdio>
 #include <cmath>
 #include <cstring>
@@ -14,6 +18,9 @@
 void RenderBagScreen(UIResource& res, UIState& state, GameManager* game, int curW, int curH) {
     DrawImageCentered(res.bagTex, curW, curH);
     Rectangle br = GetImageDrawRect(res.bagTex, curW, curH);
+
+    // 每帧清空并重新构建点击区域
+    state.bagItemHitRects.clear();
 
     Inventory* inv = game->getInventory();
     if (!inv) return;
@@ -119,7 +126,7 @@ void RenderBagScreen(UIResource& res, UIState& state, GameManager* game, int cur
                 {ix, iy, itemW, itemH}, {0, 0}, 0.0f, WHITE);
         }
 
-        // 显示物品名称 + 数量（数量在名称右边）
+                // 显示物品名称 + 数量（数量在名称右边）
         const char* dName = getItemName(itemId);
         Vector2 nameSz = MeasureTextEx(res.staminaFont, dName, 22, 1);
         DrawTextEx(res.staminaFont, dName,
@@ -132,6 +139,9 @@ void RenderBagScreen(UIResource& res, UIState& state, GameManager* game, int cur
         float cntX = ix + (itemW - nameSz.x) / 2 + nameSz.x + 4;
         float cntY = iy + itemH + 4;
         DrawTextEx(res.staminaFont, cntBuf, {cntX, cntY}, 18, 1, BLACK);
+
+        // 保存物品点击区域（用于打开详情弹窗）
+        state.bagItemHitRects.push_back({ix - 8, iy - 8, itemW + 16, itemH + 40, count, itemId});
 
         idx++;
     }
@@ -174,10 +184,73 @@ void RenderBagScreen(UIResource& res, UIState& state, GameManager* game, int cur
 
 void HandleBagScreenInput(UIResource& res, UIState& state, int curW, int curH) {
     Vector2 mousePos = GetMousePosition();
-    // 只有点击退出按钮才返回
+
+    // 点击退出按钮返回主界面
     if (HitTestRect(mousePos, state.bagExitBtnRect.x, state.bagExitBtnRect.y,
                     state.bagExitBtnRect.width, state.bagExitBtnRect.height)) {
         state.screenState = SCREEN_MAIN;
+        return;
+    }
+
+    // 点击物品打开详情弹窗
+    for (auto& h : state.bagItemHitRects) {
+        if (HitTestRect(mousePos, h.x, h.y, h.w, h.h)) {
+            const std::string& itemId = h.itemId;
+
+            // 查找模板获取详细信息
+            auto allTemplates = ItemTemplate::loadAllTemplates();
+            const ItemTemplate* tmpl = nullptr;
+            for (const auto& t : allTemplates) {
+                if (t.getId() == itemId) {
+                    tmpl = &t;
+                    break;
+                }
+            }
+
+            state.bagDetailItemId = itemId;
+            state.bagDetailPrice = tmpl ? tmpl->getPrice() : 0;
+
+            // 设置物品名称
+            auto getItemName = [](const std::string& id) -> std::string {
+                if (id == "potion_003") return "止痛片";
+                if (id == "potion_002") return "外伤药包";
+                if (id == "potion_001") return "急救包";
+                if (id == "food_001")   return "罐头";
+                if (id == "food_002")   return "压缩饼干";
+                if (id == "food_003")   return "瓶装水";
+                if (id == "upgrade_stone") return "升级石";
+                if (id == "recruit_card")  return "招募卡";
+                if (id.find("weapon_s") != std::string::npos || id.find("sword") != std::string::npos) return "剑";
+                if (id.find("weapon_b") != std::string::npos || id.find("book") != std::string::npos) return "魔法书";
+                if (id.find("weapon_h") != std::string::npos || id.find("shield") != std::string::npos) return "护盾";
+                return id;
+            };
+            state.bagDetailItemName = tmpl ? tmpl->getName() : getItemName(itemId);
+
+            // 设置物品分类
+            state.bagDetailCategory = tmpl ? tmpl->getCategory() : "";
+
+            // 设置物品描述
+            auto getItemDesc = [](const std::string& id) -> std::string {
+                if (id == "potion_003") return "恢复生命25点";
+                if (id == "potion_002") return "恢复生命40点";
+                if (id == "potion_001") return "恢复生命80点";
+                if (id == "food_001")   return "恢复体力50点";
+                if (id == "food_002")   return "恢复体力30点";
+                if (id == "food_003")   return "恢复体力20点";
+                if (id == "upgrade_stone") return "用于战斗角色升级";
+                if (id == "recruit_card")  return "消耗1张招募卡随机获得1个战斗角色";
+                if (id.find("sword") != std::string::npos) return "剑类装备：攻击加成，装备后全队生效";
+                if (id.find("book") != std::string::npos) return "魔法书装备：蓝条和生命恢复，装备后全队生效";
+                if (id.find("shield") != std::string::npos) return "护盾装备：防御加成，装备后全队生效";
+                return "";
+            };
+            state.bagDetailDesc = tmpl ? tmpl->getDescription() : getItemDesc(itemId);
+
+            // 打开详情弹窗
+            state.bagShowDetail = true;
+            return;
+        }
     }
 }
 
@@ -482,11 +555,102 @@ void HandleTaskListScreenInput(UIResource& res, UIState& state, GameManager* gam
 // ============================================================
 // 绘制 & 输入：招募界面
 // ============================================================
-void RenderRecruitScreen(UIResource& res, int curW, int curH) {
+void RenderRecruitScreen(UIResource& res, UIState& state, int curW, int curH) {
     DrawImageCentered(res.recruitTex, curW, curH);
+
+    // ---- 黄色定位坐标系（辅助UI布局定位）----
+    const float gridStep = 50.0f;
+    Color gridColor = Color{ 255, 255, 0, 60 };
+    for (float x = 0; x <= curW; x += gridStep)
+        DrawLine((int)x, 0, (int)x, curH, gridColor);
+    for (float y = 0; y <= curH; y += gridStep)
+        DrawLine(0, (int)y, curW, (int)y, gridColor);
+
+    Color thickColor = Color{ 255, 255, 0, 100 };
+    const float thickStep = gridStep * 5;
+    for (float x = 0; x <= curW; x += thickStep)
+        DrawLine((int)x, 0, (int)x, curH, thickColor);
+    for (float y = 0; y <= curH; y += thickStep)
+        DrawLine(0, (int)y, curW, (int)y, thickColor);
+
+    char coordBuf[16];
+    for (float x = 0; x <= curW; x += thickStep) {
+        snprintf(coordBuf, sizeof(coordBuf), "%.0f", x);
+        Vector2 sz = MeasureTextEx(res.staminaFont, coordBuf, 16, 1);
+        DrawTextEx(res.staminaFont, coordBuf, { x - sz.x / 2, 4 }, 16, 1, YELLOW);
+    }
+    for (float y = 0; y <= curH; y += thickStep) {
+        snprintf(coordBuf, sizeof(coordBuf), "%.0f", y);
+        Vector2 sz = MeasureTextEx(res.staminaFont, coordBuf, 16, 1);
+        DrawTextEx(res.staminaFont, coordBuf, { 4, y - sz.y / 2 }, 16, 1, YELLOW);
+    }
+
+        // ---- 招募按钮（x600-1100，y1200-1300）----
+        float btnX = 600.0f;
+        float btnY = 1200.0f;
+        float btnW = 500.0f;  // 1100-600=500
+        float btnH = 100.0f;  // 1300-1200=100
+
+        // 透明按钮（仅保留点击区域）
+
+        // ---- 招募结果全屏显示（白底后全屏 ChenErYuan.png）----
+    if (state.recruitShowResult) {
+        // 全屏白色
+        DrawRectangle(0, 0, curW, curH, WHITE);
+        // 图片全屏覆盖（拉伸铺满）
+        if (res.chenErYuanTex.id > 0) {
+            DrawTexturePro(res.chenErYuanTex,
+                { 0, 0, (float)res.chenErYuanTex.width, (float)res.chenErYuanTex.height },
+                { 0, 0, (float)curW, (float)curH },
+                { 0, 0 }, 0.0f, WHITE);
+        }
+    }
+
+        // ---- 招募卡数量显示（横2200-2350，竖50-100）----
+    // 使用游戏管理器获取招募卡数量
+    // 在UIState中暂存，由HandleRecruitScreenInput更新
+    float cardX = 2200.0f;
+    float cardY = 50.0f;
+    float cardW = 150.0f;  // 2350-2200=150
+    float cardH = 50.0f;   // 100-50=50
+    // 黑色背景
+    DrawRectangle((int)cardX, (int)cardY, (int)cardW, (int)cardH, BLACK);
+
+    char cardBuf[32];
+    snprintf(cardBuf, sizeof(cardBuf), "x%d", state.recruitCardCount);
+    Vector2 cardSz = MeasureTextEx(res.staminaFont, cardBuf, 28, 1);
+    DrawTextEx(res.staminaFont, cardBuf,
+        { cardX + (cardW - cardSz.x) / 2, cardY + (cardH - cardSz.y) / 2 },
+        28, 1, WHITE);
 }
 
-void HandleRecruitScreenInput(UIState& state) {
+void HandleRecruitScreenInput(UIState& state, GameManager* game, int curW, int curH) {
+    Vector2 mousePos = GetMousePosition();
+
+    // ---- 每帧同步招募卡数量 ----
+    Inventory* inv = game->getInventory();
+    state.recruitCardCount = (inv) ? inv->getCount("recruit_card") : 0;
+
+    // ---- 如果正在显示招募结果，点击任意位置关闭 ----
+    if (state.recruitShowResult) {
+        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+            state.recruitShowResult = false;
+        }
+        return;
+    }
+
+        // ---- 点击招募按钮（局部变量，与 RenderRecruitScreen 中一致）----
+    Rectangle localRecruitBtn = { 600.0f, 1200.0f, 500.0f, 100.0f };
+    if (HitTestRect(mousePos, localRecruitBtn.x, localRecruitBtn.y,
+                    localRecruitBtn.width, localRecruitBtn.height)) {
+        if (inv && inv->hasItem("recruit_card", 1)) {
+            inv->removeItem("recruit_card", 1);
+            state.recruitShowResult = true;
+        }
+        return;
+    }
+
+    // ---- 点击空白区域返回主界面 ----
     state.screenState = SCREEN_MAIN;
 }
 
@@ -528,21 +692,27 @@ void RenderFriendsScreen(UIResource& res, UIState& state, GameManager* game, int
     DrawTextEx(res.staminaFont, "查看更多伙伴>",
         { btnX + (btnW - txtSz.x) / 2, btnY + (btnH - txtSz.y) / 2 }, 28, 1, WHITE);
 
-    // ---- 右侧：当前选中角色的详细面板 ----
+        // ---- 右侧：当前选中角色的详细面板 ----
+    // 确保索引不越界
+    if (state.fighterSelectedIndex >= (int)fighters.size()) {
+        state.fighterSelectedIndex = (int)fighters.size() - 1;
+    }
+    if (state.fighterSelectedIndex < 0) state.fighterSelectedIndex = 0;
+
     if (!fighters.empty()) {
-        Combatant* cur = fighters[0];
+        Combatant* cur = fighters[state.fighterSelectedIndex];
         if (cur) {
             int oldAtk = cur->getAttack();
             int oldDef = cur->getDefense();
             int oldHp = cur->getMaxHp();
             int oldLv = cur->getLevel();
 
-            float panelX = br.x + br.width * 0.55f;
+                        float panelX = br.x + br.width * 0.55f;
             float panelY = br.y + 30;
             float panelW = br.width * 0.38f;
             float panelH = br.height - 80;
 
-            // 半透明面板背景
+                        // 半透明面板背景
             DrawRectangle((int)panelX, (int)panelY, (int)panelW, (int)panelH,
                           Color{ 30, 30, 50, 200 });
 
@@ -722,21 +892,41 @@ void RenderFriendsScreen(UIResource& res, UIState& state, GameManager* game, int
                 lineY = descY + 8;
             }
 
-            // ── 查看等级提升条件按钮 ──
-            float infoBtnX = panelX + 15;
-            float infoBtnY = panelY + panelH - 55;
-            float infoBtnW = panelW - 30;
-            float infoBtnH = 42;
-            bool infoHover = HitTestRect(mousePos, infoBtnX, infoBtnY, infoBtnW, infoBtnH);
-            Color infoColor = infoHover ? Color{ 80, 80, 200, 220 } : Color{ 60, 60, 140, 180 };
-            DrawRectangleRounded({ infoBtnX, infoBtnY, infoBtnW, infoBtnH }, 0.2f, 8, infoColor);
-            DrawRectangleRoundedLines({ infoBtnX, infoBtnY, infoBtnW, infoBtnH }, 0.2f, 8,
-                                      Color{ 120, 120, 255, 200 });
-            const char* infoLabel = "查看升级条件";
-            Vector2 infoSz = MeasureTextEx(res.staminaFont, infoLabel, 26, 1);
-            DrawTextEx(res.staminaFont, infoLabel,
-                { infoBtnX + (infoBtnW - infoSz.x) / 2, infoBtnY + (infoBtnH - infoSz.y) / 2 },
-                26, 1, WHITE);
+
+            // ── 下一个伙伴按钮（查看升级条件上方）----
+                        float nextBtnX = panelX + 15;
+                        float nextBtnY = panelY + panelH - 105;
+                        float nextBtnW = panelW - 30;
+                        float nextBtnH = 42;
+                        bool nextHover = HitTestRect(mousePos, nextBtnX, nextBtnY, nextBtnW, nextBtnH);
+                        Color nextColor = nextHover ? Color{ 60, 180, 220, 240 } : Color{ 40, 140, 180, 200 };
+                        DrawRectangleRounded({ nextBtnX, nextBtnY, nextBtnW, nextBtnH }, 0.2f, 8, nextColor);
+                        DrawRectangleRoundedLines({ nextBtnX, nextBtnY, nextBtnW, nextBtnH }, 0.2f, 8,
+                                                  Color{ 100, 220, 255, 200 });
+                        char nextLabel[64];
+                        int totalFighters = (int)fighters.size();
+                        snprintf(nextLabel, sizeof(nextLabel), "下一个伙伴");
+                        Vector2 nextSz = MeasureTextEx(res.staminaFont, nextLabel, 24, 1);
+                        DrawTextEx(res.staminaFont, nextLabel,
+                            { nextBtnX + (nextBtnW - nextSz.x) / 2, nextBtnY + (nextBtnH - nextSz.y) / 2 },
+                            24, 1, WHITE);
+                        state.friendNextBtnRect = { nextBtnX, nextBtnY, nextBtnW, nextBtnH };
+
+                        // ── 查看等级提升条件按钮（在下一个按钮下方）----
+                        float infoBtnX = panelX + 15;
+                        float infoBtnY = nextBtnY + nextBtnH + 8;
+                        float infoBtnW = panelW - 30;
+                        float infoBtnH = 42;
+                        bool infoHover = HitTestRect(mousePos, infoBtnX, infoBtnY, infoBtnW, infoBtnH);
+                        Color infoColor = infoHover ? Color{ 80, 80, 200, 220 } : Color{ 60, 60, 140, 180 };
+                        DrawRectangleRounded({ infoBtnX, infoBtnY, infoBtnW, infoBtnH }, 0.2f, 8, infoColor);
+                        DrawRectangleRoundedLines({ infoBtnX, infoBtnY, infoBtnW, infoBtnH }, 0.2f, 8,
+                                                  Color{ 120, 120, 255, 200 });
+                        const char* infoLabel = "查看升级条件";
+                        Vector2 infoSz = MeasureTextEx(res.staminaFont, infoLabel, 26, 1);
+                        DrawTextEx(res.staminaFont, infoLabel,
+                            { infoBtnX + (infoBtnW - infoSz.x) / 2, infoBtnY + (infoBtnH - infoSz.y) / 2 },
+                            26, 1, WHITE);
 
             // ── 升级条件弹窗 ──
             if (state.showFighterUpgradeInfo) {
@@ -814,6 +1004,8 @@ void RenderFriendsScreen(UIResource& res, UIState& state, GameManager* game, int
 void HandleFriendsScreenInput(UIResource& res, UIState& state, GameManager* game, int curW, int curH) {
     Vector2 mousePos = GetMousePosition();
     Rectangle br = GetImageDrawRect(res.friendsTex, curW, curH);
+    std::vector<Combatant*> fighters = game->getFighters();
+    Inventory* inventory = game->getInventory();
 
     // ---- 只有点击右上角退出按钮才能退出 ----
     if (HitTestRect(mousePos, state.friendExitBtnRect.x, state.friendExitBtnRect.y,
@@ -846,13 +1038,29 @@ void HandleFriendsScreenInput(UIResource& res, UIState& state, GameManager* game
         return;
     }
 
-    // ---- 检测升级按钮 ----
+        // ---- 检测"下一个伙伴"按钮：切换到全屏详情页 ----
+        if (HitTestRect(mousePos, state.friendNextBtnRect.x, state.friendNextBtnRect.y,
+                        state.friendNextBtnRect.width, state.friendNextBtnRect.height)) {
+            std::vector<Combatant*> fighters = game->getFighters();
+            if (!fighters.empty()) {
+                // 切换到下一个伙伴
+                state.fighterSelectedIndex++;
+                if (state.fighterSelectedIndex >= (int)fighters.size()) {
+                    state.fighterSelectedIndex = 0;  // 循环
+                }
+                // 切换到全屏详情页
+                state.screenState = SCREEN_FIGHTER_DETAIL;
+            }
+            return;
+        }
+
+    // ---- 检测升级按钮（使用当前选中的伙伴）----
     if (HitTestRect(mousePos, state.fighterUpgradeBtnRect.x, state.fighterUpgradeBtnRect.y,
                     state.fighterUpgradeBtnRect.width, state.fighterUpgradeBtnRect.height)) {
         std::vector<Combatant*> fighters = game->getFighters();
         Inventory* inventory = game->getInventory();
         if (!fighters.empty() && inventory) {
-            Combatant* cur = fighters[0];
+            Combatant* cur = fighters[state.fighterSelectedIndex];
             int need = cur->getUpgradeStoneCost();
             if (inventory->hasItem("upgrade_stone", need)) {
                 inventory->removeItem("upgrade_stone", need);
@@ -1021,12 +1229,236 @@ void HandleCharacterFileScreenInput(UIResource& res, UIState& state, int curW, i
     float btnX = inputP2.x + 10;
     float btnY = inputP1.y;
 
-    if (HitTestRect(mousePos, inputP1.x, inputP1.y, boxW, boxH)) {
+        if (HitTestRect(mousePos, inputP1.x, inputP1.y, boxW, boxH)) {
         state.nameEditing = true;
     } else if (HitTestRect(mousePos, btnX, btnY, btnW, btnH)) {
         state.nameEditing = false;
     } else {
         state.nameEditing = false;
         state.screenState = SCREEN_MAIN;
+    }
+}
+
+// ============================================================
+// 背包物品详情弹窗 — 绘制
+// ============================================================
+void RenderBagDetailDialog(UIResource& res, UIState& state, GameManager* game, int curW, int curH) {
+    if (!state.bagShowDetail) return;
+
+    Vector2 mousePos = GetMousePosition();
+
+    // ---- 半透明遮罩 ----
+    DrawRectangle(0, 0, curW, curH, Color{ 0, 0, 0, 160 });
+
+    // ---- 弹窗尺寸 ----
+    float dlgW = 520;
+    float dlgH = 380;
+    float dlgX = (curW - dlgW) / 2;
+    float dlgY = (curH - dlgH) / 2;
+
+    // ---- 弹窗背景 ----
+    DrawRectangleRounded({ dlgX, dlgY, dlgW, dlgH }, 0.08f, 8, Color{ 35, 35, 55, 240 });
+    DrawRectangleRoundedLines({ dlgX, dlgY, dlgW, dlgH }, 0.08f, 8, Color{ 180, 180, 220, 200 });
+
+    // ---- 物品图标 ----
+    float iconSize = 100;
+    float iconX = dlgX + (dlgW - iconSize) / 2;
+    float iconY = dlgY + 20;
+    int iconIdx = state.getStoreIconIdx(state.bagDetailItemId);
+    if (iconIdx >= 0 && (size_t)iconIdx < res.storeIcons.size() && res.storeIcons[iconIdx].id > 0) {
+        DrawTexturePro(res.storeIcons[iconIdx],
+            {0, 0, (float)res.storeIcons[iconIdx].width, (float)res.storeIcons[iconIdx].height},
+            {iconX, iconY, iconSize, iconSize}, {0, 0}, 0.0f, WHITE);
+    }
+
+    // ---- 物品名称 ----
+    float nameY = iconY + iconSize + 10;
+    Vector2 nameSz = MeasureTextEx(res.staminaFont, state.bagDetailItemName.c_str(), 30, 1);
+    DrawTextEx(res.staminaFont, state.bagDetailItemName.c_str(),
+        { dlgX + (dlgW - nameSz.x) / 2, nameY }, 30, 1, GOLD);
+
+    // ---- 物品作用描述 ----
+    float descY = nameY + 45;
+    Vector2 descSz = MeasureTextEx(res.staminaFont, state.bagDetailDesc.c_str(), 22, 1);
+    DrawTextEx(res.staminaFont, state.bagDetailDesc.c_str(),
+        { dlgX + (dlgW - descSz.x) / 2, descY }, 22, 1, WHITE);
+
+    // ---- 分类标签 ----
+    float catY = descY + 35;
+    const char* catLabel = "";
+    if (state.bagDetailCategory == "food") catLabel = "食品类";
+    else if (state.bagDetailCategory == "potion") catLabel = "药品类";
+    else if (state.bagDetailCategory == "weapon") catLabel = "装备类（全队生效）";
+    else if (state.bagDetailCategory == "material") catLabel = "材料类";
+    else if (state.bagDetailCategory == "special") catLabel = "特殊物品";
+    if (catLabel[0] != '\0') {
+        Vector2 catSz = MeasureTextEx(res.staminaFont, catLabel, 18, 1);
+        DrawTextEx(res.staminaFont, catLabel,
+            { dlgX + (dlgW - catSz.x) / 2, catY }, 18, 1, SKYBLUE);
+    }
+
+    // ---- 三个按钮 ----
+    float btnY = dlgY + dlgH - 70;
+    float btnW = 130;
+    float btnH = 46;
+    float gap = 20;
+    float totalW = btnW * 3 + gap * 2;
+    float btnStartX = dlgX + (dlgW - totalW) / 2;
+
+        // 使用按钮 — 药品和升级石不显示使用按钮
+    const std::string& useItemId = state.bagDetailItemId;
+    const std::string& useCat = state.bagDetailCategory;
+    bool showUseBtn = (useCat != "potion" && useItemId.find("upgrade_stone") == std::string::npos);
+    
+    if (showUseBtn) {
+        float useBtnX = btnStartX;
+        bool useHover = HitTestRect(mousePos, useBtnX, btnY, btnW, btnH);
+        Color useColor = useHover ? Color{ 60, 180, 60, 240 } : Color{ 40, 140, 40, 200 };
+        DrawRectangleRounded({ useBtnX, btnY, btnW, btnH }, 0.2f, 8, useColor);
+        DrawRectangleRoundedLines({ useBtnX, btnY, btnW, btnH }, 0.2f, 8, Color{ 100, 255, 100, 200 });
+        Vector2 useSz = MeasureTextEx(res.staminaFont, "使用", 26, 1);
+        DrawTextEx(res.staminaFont, "使用",
+            { useBtnX + (btnW - useSz.x) / 2, btnY + (btnH - useSz.y) / 2 }, 26, 1, WHITE);
+        state.bagDetailUseBtnRect = { useBtnX, btnY, btnW, btnH };
+        btnStartX += btnW + gap;
+    } else {
+        state.bagDetailUseBtnRect = {0, 0, 0, 0};
+    }
+
+        // 取消按钮
+    float cancelBtnX = btnStartX;
+    bool cancelHover = HitTestRect(mousePos, cancelBtnX, btnY, btnW, btnH);
+    Color cancelColor = cancelHover ? Color{ 100, 100, 100, 220 } : Color{ 70, 70, 70, 180 };
+    DrawRectangleRounded({ cancelBtnX, btnY, btnW, btnH }, 0.2f, 8, cancelColor);
+    DrawRectangleRoundedLines({ cancelBtnX, btnY, btnW, btnH }, 0.2f, 8, Color{ 180, 180, 180, 200 });
+    Vector2 cancelSz = MeasureTextEx(res.staminaFont, "取消", 26, 1);
+    DrawTextEx(res.staminaFont, "取消",
+        { cancelBtnX + (btnW - cancelSz.x) / 2, btnY + (btnH - cancelSz.y) / 2 }, 26, 1, WHITE);
+    state.bagDetailCancelBtnRect = { cancelBtnX, btnY, btnW, btnH };
+
+    // 出售按钮
+    float sellBtnX = cancelBtnX + btnW + gap;
+    bool sellHover = HitTestRect(mousePos, sellBtnX, btnY, btnW, btnH);
+    Color sellColor = sellHover ? Color{ 200, 160, 40, 240 } : Color{ 180, 130, 30, 200 };
+    DrawRectangleRounded({ sellBtnX, btnY, btnW, btnH }, 0.2f, 8, sellColor);
+    DrawRectangleRoundedLines({ sellBtnX, btnY, btnW, btnH }, 0.2f, 8, Color{ 255, 220, 80, 200 });
+
+    int sellPrice = (int)(state.bagDetailPrice * 0.5f);
+    char sellLabel[32];
+    snprintf(sellLabel, sizeof(sellLabel), "出售(%d金)", sellPrice);
+    Vector2 sellSz = MeasureTextEx(res.staminaFont, sellLabel, 22, 1);
+    DrawTextEx(res.staminaFont, sellLabel,
+        { sellBtnX + (btnW - sellSz.x) / 2, btnY + (btnH - sellSz.y) / 2 }, 22, 1, WHITE);
+    state.bagDetailSellBtnRect = { sellBtnX, btnY, btnW, btnH };
+}
+
+// ============================================================
+// 背包物品详情弹窗 — 输入处理
+// ============================================================
+void HandleBagDetailDialogInput(UIResource& res, UIState& state, GameManager* game, int curW, int curH) 
+{
+    if (!state.bagShowDetail) return;
+
+    Vector2 mousePos = GetMousePosition();
+
+        // ---- 点击使用按钮 ----
+    if (HitTestRect(mousePos, state.bagDetailUseBtnRect.x, state.bagDetailUseBtnRect.y,
+                    state.bagDetailUseBtnRect.width, state.bagDetailUseBtnRect.height)) {
+        Inventory* inv = game->getInventory();
+        MainCharacter* player = game->getMainChar();
+                const std::string& itemId = state.bagDetailItemId;
+        const std::string& cat = state.bagDetailCategory;
+                if (!inv || !player || !inv->hasItem(itemId, 1)) {
+            // 没有该物品或指针无效，关闭弹窗
+            state.bagShowDetail = false;
+            return;
+        }
+
+                                                                        if (cat == "food") {
+                // 食物：恢复体力
+                auto allTemplates = ItemTemplate::loadAllTemplates();
+                int restoreAmt = 0;
+                for (const auto& t : allTemplates) {
+                    if (t.getId() == itemId) {
+                        restoreAmt = t.getEffectValue();
+                        break;
+                    }
+                }
+                player->restoreStamina(restoreAmt);
+                inv->removeItem(itemId, 1);
+                state.bagShowDetail = false;
+            }
+            else if (cat == "weapon") {
+                // 装备：为全队所有角色装备
+                Equipment eq;
+                eq.id = itemId;
+                auto allTemplates = ItemTemplate::loadAllTemplates();
+                const ItemTemplate* tmpl = nullptr;
+                for (const auto& t : allTemplates) {
+                    if (t.getId() == itemId) {
+                        tmpl = &t;
+                        break;
+                    }
+                }
+                if (tmpl) {
+                    eq.name = tmpl->getName();
+                    eq.level = tmpl->getLevel();
+                    if (itemId.find("sword") != std::string::npos) {
+                        eq.type = "weapon";
+                        eq.attackBonus = tmpl->getEffectValue() / 100.0;
+                    } else if (itemId.find("book") != std::string::npos) {
+                        eq.type = "book";
+                        eq.mpBonus = tmpl->getEffectValue() / 100.0;
+                    } else if (itemId.find("shield") != std::string::npos) {
+                        eq.type = "shield";
+                        eq.defenseBonus = tmpl->getEffectValue() / 100.0;
+                    }
+                    // 为所有战斗角色装备
+                    auto fighters = game->getFighters();
+                    for (auto* f : fighters) {
+                        if (f) {
+                            f->equipItem(eq);
+                        }
+                    }
+                }
+                inv->removeItem(itemId, 1);
+                state.bagShowDetail = false;
+            }
+                        else {
+                            state.bagShowDetail = false;
+                        }
+        }
+
+
+    // ---- 点击取消按钮 ----
+    if (HitTestRect(mousePos, state.bagDetailCancelBtnRect.x, state.bagDetailCancelBtnRect.y,
+                    state.bagDetailCancelBtnRect.width, state.bagDetailCancelBtnRect.height)) {
+        state.bagShowDetail = false;
+        return;
+    }
+
+    // ---- 点击出售按钮 ----
+    if (HitTestRect(mousePos, state.bagDetailSellBtnRect.x, state.bagDetailSellBtnRect.y,
+                    state.bagDetailSellBtnRect.width, state.bagDetailSellBtnRect.height)) {
+        Inventory* inv = game->getInventory();
+        MainCharacter* player = game->getMainChar();
+        if (inv && player && inv->hasItem(state.bagDetailItemId, 1)) {
+            int sellPrice = (int)(state.bagDetailPrice * 0.5f);
+            if (sellPrice > 0) {
+                inv->removeItem(state.bagDetailItemId, 1);
+                player->addGold(sellPrice);
+            }
+            state.bagShowDetail = false;
+        }
+        return;
+    }
+
+    // ---- 点击弹窗外部关闭 ----
+    float dlgW = 520;
+    float dlgH = 380;
+    float dlgX = (curW - dlgW) / 2;
+    float dlgY = (curH - dlgH) / 2;
+    if (!HitTestRect(mousePos, dlgX, dlgY, dlgW, dlgH)) {
+        state.bagShowDetail = false;
     }
 }

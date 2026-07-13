@@ -444,18 +444,8 @@ void BattleSystem::handleVictory() {
         e->resetMp();
     }
 
-    // 存活角色恢复 100% HP，死亡角色恢复 50% HP
-    for (auto* f : allFighters) {
-        if (f->isAlive()) {
-            int healAmt = f->getMaxHp() - f->getHp();
-            f->heal(healAmt);
-            std::cout << f->getName() << " 恢复 100% 生命值（+" << healAmt << "）" << std::endl;
-        } else {
-            int healAmt = f->getMaxHp() * 50 / 100;
-            f->heal(healAmt);
-            std::cout << f->getName() << " 已阵亡，恢复 50% 生命值（+" << healAmt << "）" << std::endl;
-        }
-    }
+        // 血量数值保留原样，不做恢复
+    std::cout << "角色血量已保留战斗结束时的状态" << std::endl;
 }
 
 void BattleSystem::handleDefeat() {
@@ -470,18 +460,8 @@ void BattleSystem::handleDefeat() {
         e->resetMp();
     }
 
-    // 存活角色恢复 100% HP，死亡角色恢复 50% HP
-    for (auto* f : allFighters) {
-        if (f->isAlive()) {
-            int healAmt = f->getMaxHp() - f->getHp();
-            f->heal(healAmt);
-            std::cout << f->getName() << " 恢复 100% 生命值（+" << healAmt << "）" << std::endl;
-        } else {
-            int healAmt = f->getMaxHp() * 50 / 100;
-            f->heal(healAmt);
-            std::cout << f->getName() << " 已阵亡，恢复 50% 生命值（+" << healAmt << "）" << std::endl;
-        }
-    }
+        // 血量数值保留原样，不做恢复
+    std::cout << "角色血量已保留战斗结束时的状态" << std::endl;
 }
 
 Enemy* BattleSystem::getCurrentEnemy() const { return currentEnemy; }

@@ -270,9 +270,13 @@ void HandleStoreScreenInput(UIResource& res, UIState& state, GameManager* game, 
                             if (f->equipItem(eq)) { equipped = true; break; }
                         }
                     }
-                    if (!equipped) inventory->addItem(state.storeBuyId, 1);
+                                        if (!equipped) inventory->addItem(state.storeBuyId, 1);
                 } else {
                     inventory->addItem(state.storeBuyId, 1);
+                }
+                // 同步招募卡数量（如果购买的是招募卡）
+                if (state.storeBuyId == "recruit_card") {
+                    state.recruitCardCount = inventory->getCount("recruit_card");
                 }
                 state.storeDlgTitle = "购买成功";
                 state.storeDlgMsg = "商品已添加到背包/装备";

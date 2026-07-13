@@ -19,6 +19,7 @@ struct UIResource {
     Texture2D story1Tex;
     Texture2D story2Tex;
     Texture2D recruitTex;
+    Texture2D chenErYuanTex;
     Texture2D friendsTex;
     Texture2D charFileTex;
 

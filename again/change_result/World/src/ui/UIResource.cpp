@@ -35,6 +35,7 @@ void UIResource::loadAll() {
     story1Tex   = loadTex("resources/interface/story1.png");
     story2Tex   = loadTex("resources/interface/story2.png");
     recruitTex  = loadTex("resources/interface/Recruiting_teammates.png");
+    chenErYuanTex = loadTex("resources/interface/ChenErYuan.png");
     friendsTex  = loadTex("resources/interface/friends.png");
     charFileTex = loadTex("resources/interface/character_file.png");
 
@@ -126,6 +127,7 @@ void UIResource::unloadAll() {
     unloadTex(story1Tex);
     unloadTex(story2Tex);
     unloadTex(recruitTex);
+    unloadTex(chenErYuanTex);
     unloadTex(friendsTex);
     unloadTex(charFileTex);
     unloadTex(mapSubTex);
