@@ -1,4 +1,5 @@
 #include "SplashScreen.h"
+#include "StoreScreen.h"
 #include "UIShared.h"
 #include "UIHelper.h"
 #include "UIResource.h"
@@ -205,8 +206,8 @@ void RenderStoreScreen(UIResource& res, UIState& state, GameManager* game, int c
                 state.storeBuyId = it.id;
                 state.storeBuyPrice = it.price;
                 state.storeBuyCur = "gold";
-                char buf[128];
-                snprintf(buf, sizeof(buf), "确定购买 %s？\n价格: %d金币\n%s", it.name.c_str(), it.price, it.description.c_str());
+                                char buf[128];
+                snprintf(buf, sizeof(buf), "确定购买 %s？ 价格: %d金币 (%s)", it.name.c_str(), it.price, it.description.c_str());
                 state.storeDlgTitle = "购买确认";
                 state.storeDlgMsg = buf;
                 state.storeShowSubMenu = false;
@@ -252,25 +253,9 @@ void HandleStoreScreenInput(UIResource& res, UIState& state, GameManager* game, 
                 else player->addDiamond(-state.storeBuyPrice);
                 // 装备类处理
                 StoreEntry& be = state.storeEntries[state.storeBuyEntryIdx];
-                if (be.cat == "weapon") {
-                    Equipment eq;
-                    eq.id = state.storeBuyId;
-                    if (state.storeBuyId.find("s1") != std::string::npos) { eq.name="初级剑"; eq.type="weapon"; eq.level=1; eq.attackBonus=0.05; }
-                    else if (state.storeBuyId.find("s2") != std::string::npos) { eq.name="中级剑"; eq.type="weapon"; eq.level=2; eq.attackBonus=0.10; }
-                    else if (state.storeBuyId.find("s3") != std::string::npos) { eq.name="高级剑"; eq.type="weapon"; eq.level=3; eq.attackBonus=0.15; }
-                    else if (state.storeBuyId.find("b1") != std::string::npos) { eq.name="初级魔法书"; eq.type="book"; eq.level=1; eq.mpBonus=0.05; eq.hpRestore=10; }
-                    else if (state.storeBuyId.find("b2") != std::string::npos) { eq.name="中级魔法书"; eq.type="book"; eq.level=2; eq.mpBonus=0.10; eq.hpRestore=15; }
-                    else if (state.storeBuyId.find("b3") != std::string::npos) { eq.name="高级魔法书"; eq.type="book"; eq.level=3; eq.mpBonus=0.15; eq.hpRestore=20; }
-                    else if (state.storeBuyId.find("h1") != std::string::npos) { eq.name="初级护盾"; eq.type="shield"; eq.level=1; eq.defenseBonus=0.05; }
-                    else if (state.storeBuyId.find("h2") != std::string::npos) { eq.name="中级护盾"; eq.type="shield"; eq.level=2; eq.defenseBonus=0.10; }
-                    else if (state.storeBuyId.find("h3") != std::string::npos) { eq.name="高级护盾"; eq.type="shield"; eq.level=3; eq.defenseBonus=0.15; }
-                    bool equipped = false;
-                    for (auto* f : fighters) {
-                        if (f->getEquippedCount() < 2) {
-                            if (f->equipItem(eq)) { equipped = true; break; }
-                        }
-                    }
-                                        if (!equipped) inventory->addItem(state.storeBuyId, 1);
+                                if (be.cat == "weapon") {
+                    // 🆕 改为：直接把装备放入背包，不直接装备
+                    inventory->addItem(state.storeBuyId, 1);
                 } else {
                     inventory->addItem(state.storeBuyId, 1);
                 }
@@ -303,9 +288,9 @@ void HandleStoreScreenInput(UIResource& res, UIState& state, GameManager* game, 
                     state.storeBuyId = e.id;
                     state.storeBuyPrice = e.price;
                     state.storeBuyCur = e.cur;
-                    const char* cs = (e.cur == "gold") ? "金币" : "钻石";
+                                        const char* cs = (e.cur == "gold") ? "金币" : "钻石";
                     char buf[128];
-                    snprintf(buf, sizeof(buf), "确定购买 %s？\n价格: %d %s", e.name.c_str(), e.price, cs);
+                    snprintf(buf, sizeof(buf), "确定购买 %s？ 价格: %d %s", e.name.c_str(), e.price, cs);
                     state.storeDlgTitle = "购买确认";
                     state.storeDlgMsg = buf;
                     state.storeShowBuyDlg = true;

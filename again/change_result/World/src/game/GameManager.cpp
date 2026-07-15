@@ -32,14 +32,14 @@ GameManager::GameManager()
         enemyManager = new EnemyManager();
         recruitSystem = new RecruitSystem();
     
-                // 检查存档
+                                // 检查存档
         std::ifstream check("save.dat");
         if (check.good()) {
             hasSave = true;
             check.close();
             loadGame();
         } else {
-            // 无存档，发放初始物资
+            // 无存档，发放初始物资（不触发登录任务，由 ShowSplashScreen 处理）
             giveInitialItems();
         }
         // 无存档时由 ShowSplashScreen 处理
@@ -427,12 +427,9 @@ void GameManager::loadGame() {
         lastLoginTime = now;
     }
 
-    // 每日登录任务
+        // 每日登录任务（仅标记完成，不自动领取，让玩家手动领取）
     taskManager->updateProgress("login", 1);
     taskManager->updateProgress("login_days", 1);
-
-    // 自动发放奖励
-    autoClaimRewards();
 
     // 首次加载存档后初始化第1关（玩家进入地图时才会显示）
     if (enemyManager->getCurrentEnemies().empty()) {
@@ -440,6 +437,56 @@ void GameManager::loadGame() {
     }
 
     std::cout << "存档加载成功！" << std::endl;
+}
+
+// ============================================================
+// newGame — 新存档：重置所有数据
+// ============================================================
+void GameManager::newGame() {
+    // 重置主控角色
+    delete mainChar;
+    mainChar = new MainCharacter("", "2000-01-01", "", true);
+
+    // 重置背包
+    delete inventory;
+    inventory = new Inventory();
+
+    // 重置商店
+    delete shop;
+    shop = new Shop();
+
+    // 重置任务管理器
+    delete taskManager;
+    taskManager = new TaskManager();
+
+    // 重置敌人管理器
+    delete enemyManager;
+    enemyManager = new EnemyManager();
+
+    // 重置招募系统
+    delete recruitSystem;
+    recruitSystem = new RecruitSystem();
+
+    // 重置时间数据
+    time_t now = time(nullptr);
+    lastLoginTime = now;
+    lastStaminaRecover = now;
+    consecutiveDays = 1;
+    totalOnlineSeconds = 0;
+    dailyOnlineSeconds = 0;
+    sessionStartTime = now;
+
+    // 发放初始物资
+    giveInitialItems();
+
+        // 触发登录任务（仅标记完成，不自动领取，让玩家手动领取）
+    taskManager->updateProgress("login", 1);
+    taskManager->updateProgress("login_days", 1);
+
+    // 保存新存档
+    saveGame();
+
+    std::cout << "新的存档已创建！" << std::endl;
 }
 
 // ============================================================

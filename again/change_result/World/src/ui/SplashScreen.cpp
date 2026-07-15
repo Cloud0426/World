@@ -25,7 +25,7 @@ extern "C" {
 void RenderInitScreen(UIResource& res, int curW, int curH);
 void HandleInitScreenInput(UIState& state);
 void RenderMainScreen(UIResource& res, UIState& state, int curW, int curH);
-void HandleMainScreenInput(UIResource& res, UIState& state, int curW, int curH);
+void HandleMainScreenInput(UIResource& res, UIState& state, int curW, int curH, GameManager* game);
 
 // StoreScreen
 void InitStoreData(UIState& state, UIResource& res);
@@ -58,7 +58,15 @@ void HandleFriendsScreenInput(UIResource& res, UIState& state, GameManager* game
 void RenderFighterDetailScreen(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
 void HandleFighterDetailScreenInput(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
 
-#include "FighterDetailScreen.cpp"
+// CZoneBattle
+void RenderCZoneBattle(UIResource& res, UIState& state, int curW, int curH);
+void HandleCZoneBattleInput(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
+void UpdateCZoneBattleAnimations(UIState& state, float dt);
+void HandleCZoneEnemyTurn(UIState& state);
+void HandleMapSub3ScreenInput(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
+
+
+
 
 
 
@@ -74,6 +82,9 @@ void HandleCharacterFileKeyboardInput(UIResource& res, UIState& state, int curW,
 // BagDetail（背包物品详情弹窗）由 MiscScreens 提供
 void RenderBagDetailDialog(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
 void HandleBagDetailDialogInput(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
+// 背包装备选择角色弹窗
+void RenderBagEquipSelectDialog(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
+void HandleBagEquipSelectDialogInput(UIResource& res, UIState& state, GameManager* game, int curW, int curH);
 
 // ============================================================
 // 统一输入处理（委托各界面模块）
@@ -82,8 +93,13 @@ static void HandleAllInput(UIResource& res, UIState& state, GameManager* game, i
     // 角色档案键盘输入（提前处理，不依赖鼠标点击）
     HandleCharacterFileKeyboardInput(res, state, curW, curH);
 
-    // 鼠标点击处理
+        // 鼠标点击处理
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        // 播放点击音效
+        if (g_clickSound.stream.buffer) {
+            PlaySound(g_clickSound);
+        }
+
         // ---- 如果奖励弹窗打开，先处理弹窗 ----
         if (state.showTaskRewardDlg) {
             int curW = GetScreenWidth();
@@ -108,13 +124,15 @@ static void HandleAllInput(UIResource& res, UIState& state, GameManager* game, i
             case SCREEN_INIT:
                 HandleInitScreenInput(state);
                 break;
-            case SCREEN_MAIN:
-                HandleMainScreenInput(res, state, curW, curH);
+                        case SCREEN_MAIN:
+                HandleMainScreenInput(res, state, curW, curH, game);
                 break;
                         case SCREEN_BAG:
-                if (state.bagShowDetail) {
-                    HandleBagDetailDialogInput(res, state, game, curW, curH);
-                } else {
+                        if (state.bagShowDetail) {
+                            HandleBagDetailDialogInput(res, state, game, curW, curH);
+                        } else if (state.bagShowEquipSelect) {
+                            HandleBagEquipSelectDialogInput(res, state, game, curW, curH);
+                        } else {
                     HandleBagScreenInput(res, state, curW, curH);
                 }
                 break;
@@ -133,11 +151,14 @@ static void HandleAllInput(UIResource& res, UIState& state, GameManager* game, i
             case SCREEN_MAP_SUB2:
                 HandleMapSub2ScreenInput(res, state, game, curW, curH);
                 break;
-            case SCREEN_MAP_SUB3:
-                state.screenState = SCREEN_MAP;
+                        case SCREEN_MAP_SUB3:
+                HandleMapSub3ScreenInput(res, state, game, curW, curH);
                 break;
             case SCREEN_BATTLE:
                 HandleBattleScreenInput(res, state, curW, curH);
+                break;
+            case SCREEN_CZONE_BATTLE:
+                HandleCZoneBattleInput(res, state, game, curW, curH);
                 break;
             case SCREEN_STORY1:
                 HandleStory1ScreenInput(res, state, curW, curH);
@@ -195,9 +216,13 @@ static void HandleAllInput(UIResource& res, UIState& state, GameManager* game, i
             case SCREEN_MAP_SUB3:
                 state.screenState = SCREEN_MAP;
                 break;
-            case SCREEN_BATTLE:
+                        case SCREEN_BATTLE:
                 state.showPeaceInB = false;
                 state.screenState = SCREEN_MAP_SUB2;
+                break;
+            case SCREEN_CZONE_BATTLE:
+                state.cZone.active = false;
+                state.screenState = SCREEN_MAP_SUB3;
                 break;
                         case SCREEN_FRIENDS:
                 state.screenState = SCREEN_MAIN;
@@ -231,11 +256,15 @@ static void RenderCurrentScreen(UIResource& res, UIState& state, GameManager* ga
         case SCREEN_MAIN:
             RenderMainScreen(res, state, curW, curH);
             break;
-                case SCREEN_BAG:
+                                case SCREEN_BAG:
             RenderBagScreen(res, state, game, curW, curH);
             // 背包物品详情弹窗（覆盖在背包界面之上）
             if (state.bagShowDetail) {
                 RenderBagDetailDialog(res, state, game, curW, curH);
+            }
+            // 背包装备选择角色弹窗（覆盖在背包界面之上）
+            if (state.bagShowEquipSelect) {
+                RenderBagEquipSelectDialog(res, state, game, curW, curH);
             }
             break;
         case SCREEN_TASK_LIST:
@@ -256,8 +285,11 @@ static void RenderCurrentScreen(UIResource& res, UIState& state, GameManager* ga
         case SCREEN_MAP_SUB3:
             RenderMapSub3Screen(res, curW, curH);
             break;
-        case SCREEN_BATTLE:
+                case SCREEN_BATTLE:
             RenderBattleScreen(res, state, curW, curH);
+            break;
+        case SCREEN_CZONE_BATTLE:
+            RenderCZoneBattle(res, state, curW, curH);
             break;
         case SCREEN_STORY1:
             RenderStory1Screen(res, curW, curH);
@@ -293,9 +325,23 @@ void ShowSplashScreen(GameManager* game) {
     InitWindow(screenWidth, screenHeight, "Da Ying Xiong Shi Dai - HEROES ERA");
     SetTargetFPS(60);
 
+    // 初始化音频设备
+    InitAudioDevice();
+
     // 加载全部资源
     UIResource res;
     res.loadAll();
+
+    // 加载点击音效（支持 .mp3 和 .wav）
+    {
+        Sound s = LoadSound("All_resources/music/click.mp3");
+        if (!IsSoundValid(s)) {
+            s = LoadSound("resources/All_resources/music/click.mp3");
+        }
+        if (IsSoundValid(s)) {
+            g_clickSound = s;
+        }
+    }
 
     // 初始化UI状态
     UIState state;
@@ -306,8 +352,19 @@ void ShowSplashScreen(GameManager* game) {
     state.charName = "英雄";
     state.nameEditing = false;
 
-    // 初始化商店数据（含商品图标加载）
+        // 初始化商店数据（含商品图标加载）
     InitStoreData(state, res);
+
+    // 🆕 同步已拥有陈尔愿的状态
+    {
+        std::vector<Combatant*> fighters = game->getFighters();
+        for (auto* f : fighters) {
+            if (f && f->getName() == "陈尔愿" && f->getCollege() == "机械学院") {
+                state.hasChenErYuan = true;
+                break;
+            }
+        }
+    }
 
     // ---- 标记"每日登录"任务为完成状态（但不领取，等待玩家手动操作）----
     {
@@ -328,7 +385,7 @@ void ShowSplashScreen(GameManager* game) {
         // ---- 输入处理 ----
         HandleAllInput(res, state, game, curW, curH);
 
-        // ---- 同步 UI 状态与 GameManager 数据 ----
+                // ---- 同步 UI 状态与 GameManager 数据 ----
         MainCharacter* p = game->getMainChar();
         if (p) {
             state.coins = p->getGold();
@@ -336,11 +393,25 @@ void ShowSplashScreen(GameManager* game) {
             state.stamina = p->getStamina();
             state.maxStamina = p->getMaxStamina();
         }
+        // 🆕 同步陈尔愿拥有状态
+        if (!state.hasChenErYuan) {
+            std::vector<Combatant*> fighters = game->getFighters();
+            for (auto* f : fighters) {
+                if (f && f->getName() == "陈尔愿" && f->getCollege() == "机械学院") {
+                    state.hasChenErYuan = true;
+                    break;
+                }
+            }
+        }
 
-        // ---- 战斗逻辑更新（敌人回合 + 动画帧更新） ----
+                // ---- 战斗逻辑更新（敌人回合 + 动画帧更新） ----
         if (state.screenState == SCREEN_BATTLE) {
             HandleEnemyTurn(state);
             UpdateBattleAnimations(state, GetFrameTime());
+        }
+        if (state.screenState == SCREEN_CZONE_BATTLE) {
+            HandleCZoneEnemyTurn(state);
+            UpdateCZoneBattleAnimations(state, GetFrameTime());
         }
 
         // ---- 绘制 ----
@@ -404,7 +475,14 @@ void ShowSplashScreen(GameManager* game) {
         EndDrawing();
     }
 
+        // 卸载音效
+    if (g_clickSound.stream.buffer) {
+        UnloadSound(g_clickSound);
+        g_clickSound = { 0 };
+    }
+
     // 卸载全部资源
     res.unloadAll();
+    CloseAudioDevice();
     CloseWindow();
 }

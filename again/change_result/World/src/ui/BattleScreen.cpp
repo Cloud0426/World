@@ -1,4 +1,5 @@
 #include "SplashScreen.h"
+#include "BattleScreen.h"
 #include "UIShared.h"
 #include "UIHelper.h"
 #include "UIResource.h"
@@ -454,11 +455,21 @@ void HandleBattleScreenInput(UIResource& res, UIState& state, int curW, int curH
             float bw = p2.x - p1.x;
             float bh = p2.y - p1.y;
 
-            if (HitTestRect(mousePos, bx, by, bw, bh)) {
+                        if (HitTestRect(mousePos, bx, by, bw, bh)) {
                 // 动画播放中禁止点击技能
                 if (state.skillAnimActive || state.mouseAnimActive) break;
 
-                int requiredMp = (i == 0) ? 0 : ((i == 3) ? 100 : 50);
+                // 从角色技能数据获取 mpCost（而不是硬编码）
+                Skill* clickedSk = (i == 0) ? state.battlePlayer->getNormalAttack()
+                               : (i == 1) ? state.battlePlayer->getSkill1()
+                               : (i == 2) ? state.battlePlayer->getSkill2()
+                               : state.battlePlayer->getUltimate();
+                if (!clickedSk) {
+                    state.battleLogLines.push_back("该角色没有此技能!");
+                    break;
+                }
+
+                int requiredMp = clickedSk->mpCost;
                 if (state.battlePlayer->getMp() < requiredMp) {
                     state.battleLogLines.push_back("蓝量不足!需要 " + std::to_string(requiredMp) + " MP");
                     break;
@@ -468,13 +479,9 @@ void HandleBattleScreenInput(UIResource& res, UIState& state, int curW, int curH
 
                 int baseAtk = state.battlePlayer->getAttack();
                 double critRate = state.battlePlayer->getCritRate();
-                int skillMult = 100;
-                const char* skillName = "普攻";
+                int skillMult = clickedSk->effectValue;  // 从技能读取倍率
+                std::string skillName = clickedSk->name;
                 double effCrit = critRate;
-
-                if (i == 1) { skillMult = 200; skillName = "爆发打击"; }
-                else if (i == 2) { skillMult = 120; skillName = "精准打击"; effCrit = critRate + 0.25; }
-                else if (i == 3) { skillMult = 150; skillName = "火力压制"; }
 
                 bool isCrit = ((double)std::rand() / RAND_MAX) < effCrit;
                 int skillBase = isCrit ? (int)(baseAtk * 1.5) : baseAtk;
@@ -485,8 +492,8 @@ void HandleBattleScreenInput(UIResource& res, UIState& state, int curW, int curH
                 state.skillPayload.isCrit = isCrit;
                 state.skillPayload.rawDmg = rawDmg;
                 state.skillPayload.finalDmg = tmpFinal;
-                snprintf(state.skillPayload.logBuf, sizeof(state.skillPayload.logBuf), "%s%s造成 %d 伤害 (最终 %d)",
-                         skillName, isCrit ? "暴击!" : "", rawDmg, tmpFinal);
+                                snprintf(state.skillPayload.logBuf, sizeof(state.skillPayload.logBuf), "%s%s造成 %d 伤害 (最终 %d)",
+                         skillName.c_str(), isCrit ? "暴击!" : "", rawDmg, tmpFinal);
 
                 {
                     Vector2 pp = DesignToScreen(0.0f, 500.0f, res.battleBgTex, curW, curH);

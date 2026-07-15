@@ -4,6 +4,11 @@
 #include <vector>
 
 // ============================================================
+// 全局点击音效
+// ============================================================
+extern Sound g_clickSound;  // 由 ShowSplashScreen 加载
+
+// ============================================================
 // UI 资源管理器：封装所有纹理和字体的加载/卸载
 // ============================================================
 struct UIResource {
@@ -22,6 +27,7 @@ struct UIResource {
     Texture2D chenErYuanTex;
     Texture2D friendsTex;
     Texture2D charFileTex;
+    Texture2D getCHENTex;   // 🆕 招募成功展示图片
 
     // 子地图
     Texture2D mapSubTex;    // A区
@@ -33,7 +39,8 @@ struct UIResource {
     Texture2D battleBgTex;
     Texture2D playerTex;
     Texture2D enemyTex;
-    Texture2D btnTex[4];    // 4个技能按钮
+    Texture2D btnTex[4];    // 4个技能按钮（机械学院）
+    Texture2D energyBtnTex[4]; // 4个技能按钮（能源学院）
 
     // 精灵动画帧
     static const int SKILL_FRAMES = 10;
@@ -42,8 +49,12 @@ struct UIResource {
     static const int MOUSE_FRAMES = 10;
     Texture2D mouseFrames[MOUSE_FRAMES];
 
-    // 商店图标
-    std::vector<Texture2D> storeIcons;
+        // 商店图标
+        std::vector<Texture2D> storeIcons;
+
+                // 角色Q版图（装备选择弹窗用）
+        Texture2D machineCharTex;  // 钟关白 Q03
+        Texture2D energyCharTex;   // 陈尔愿 Q04
 
     // 加载所有资源
     void loadAll();
@@ -51,3 +62,4 @@ struct UIResource {
     // 卸载所有资源
     void unloadAll();
 };
+

@@ -34,10 +34,8 @@ private:
     long long dailyOnlineSeconds; // 当日在线秒数
     time_t sessionStartTime;       // 本次会话开始时间
 
-    // ---- 私有方法 ----
+        // ---- 私有方法 ----
     void initNewGame();
-    void loadGame();
-    void saveGame();
     void autoSave();
 
     // ============================================================
@@ -71,6 +69,9 @@ public:
     void run();
 
         // ---- 对外暴露数据给 SplashScreen ----
+        void saveGame();          // 保存游戏
+    void loadGame();          // 加载游戏
+    void newGame();           // 新存档（重置游戏）
         MainCharacter* getMainChar() const { return mainChar; }
     Inventory* getInventory() const { return inventory; }
     Shop* getShop() const { return shop; }

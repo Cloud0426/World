@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <string>
 #include <vector>
@@ -55,6 +55,8 @@ struct SkillAnimPayload {
     bool isCrit;
     int rawDmg;
     int finalDmg;
+    int targetIdx;         // 技能选中的敌人目标索引（C区战斗用）
+    bool isAoe;            // 是否群体攻击
     char logBuf[256];
 };
 
@@ -64,6 +66,70 @@ struct SkillAnimPayload {
 struct MouseAnimPayload {
     int finalDmg;
     char logBuf[256];
+};
+
+// ============================================================
+// C 区战斗系统（独立于 B 区战斗）
+// ============================================================
+struct CZoneBattleState {
+    bool active = false;
+    bool playerTurn = true;
+    bool finished = false;
+    bool victory = false;
+
+    // ── 敌人单元 ──
+    struct CEnemyUnit {
+        Enemy* enemy = nullptr;
+        float drawX = 0, drawY = 0, drawW = 0, drawH = 0;
+        float hpBarX = 0, hpBarY = 0, hpBarW = 0, hpBarH = 0;
+        float mpBarX = 0, mpBarY = 0, mpBarW = 0, mpBarH = 0;
+        int energy = 0;          // 个体能量值 0-100
+
+        // 该敌人独立的攻击动画
+        bool animActive = false;
+        int animFrame = 0;
+        float animTimer = 0.0f;
+        float animDuration = 1.5f;
+        int animFinalDmg = 0;
+        char animLogBuf[256] = {};
+    };
+    CEnemyUnit enemies[3];
+
+    // ── 玩家可选角色槽位 ──
+    struct PlayerSlot {
+        Combatant* fighter = nullptr;   // 实际角色指针
+        bool inBattle = false;          // 当前是否上场
+    };
+    PlayerSlot playerSlots[2];          // [0]=钟关白, [1]=陈尔愿
+
+    int currentPlayerIdx = -1;          // 当前上场角色索引，-1=未选择
+
+    // ── 技能动画（复用 B 区的 skillAnimFrames） ──
+    bool skillAnimActive = false;
+    int skillAnimSkillIdx = 0;
+    int skillAnimFrame = 0;
+    float skillAnimTimer = 0.0f;
+    float skillAnimDuration = 0.5f;
+    SkillAnimPayload skillPayload;
+    float skillAnimScale = 1.0f;
+    Vector2 skillAnimPos = { 0, 0 };
+
+        // ── 目标选择 ──
+    bool selectingTarget = false;     // 是否处于选择目标阶段
+    int pendingSkillIdx = -1;         // 待释放的技能索引
+    int pendingRawDmg = 0;            // 待释放的原始伤害值
+    bool pendingCrit = false;         // 待释放是否暴击
+    int pendingMpCost = 0;            // 待释放消耗MP
+
+    // ── 敌人回合控制 ──
+    bool enemyActedThisTurn = false;  // 标记本敌人回合是否已有敌人行动过
+
+        // ── 日志 ──
+    std::deque<std::string> logLines;
+    int logScrollOffset = 0;
+
+    // ── UI元素区域 ──
+    Rectangle exitBtnRect = { 0, 0, 0, 0 };
 };
 
 // ============================================================
@@ -83,7 +149,8 @@ enum ScreenState {
     SCREEN_MAP_SUB,      // 广播站子地图 (A区)
     SCREEN_MAP_SUB2,     // B区子地图
     SCREEN_MAP_SUB3,     // C区子地图
-    SCREEN_BATTLE,       // 战斗界面
+        SCREEN_BATTLE,       // 战斗界面 (B区)
+    SCREEN_CZONE_BATTLE, // C区战斗界面
         SCREEN_FRIENDS,      // 我的伙伴界面
         SCREEN_FIGHTER_DETAIL // 伙伴详情全屏界面
 };
@@ -164,7 +231,7 @@ struct UIState {
     };
     std::vector<BagHitRect> bagItemHitRects;
 
-    // ---- 背包物品详情弹窗 ----
+        // ---- 背包物品详情弹窗 ----
     bool bagShowDetail = false;          // 是否显示物品详情弹窗
     std::string bagDetailItemId;         // 被点击的物品ID
     std::string bagDetailItemName;       // 物品名称
@@ -174,6 +241,10 @@ struct UIState {
         Rectangle bagDetailUseBtnRect = {0,0,0,0};
     Rectangle bagDetailCancelBtnRect = {0,0,0,0};
     Rectangle bagDetailSellBtnRect = {0,0,0,0};
+
+    // ---- 背包装备选择角色弹窗 ----
+    bool bagShowEquipSelect = false;     // 是否显示装备选择角色弹窗
+    std::string bagEquipItemId;          // 要装备的物品ID
 
         // ---- 任务列表 ----
         int taskListScrollOffset = 0;
@@ -189,6 +260,7 @@ struct UIState {
         bool showFighterUpgradeInfo = false;
         int fighterSelectedIndex = 0;  // 当前选中的伙伴索引
         Rectangle fighterUpgradeBtnRect = { 0, 0, 0, 0 };
+        Rectangle fighterUpgradeInfoBtnRect = { 0, 0, 0, 0 };
         Rectangle friendExitBtnRect = { 0, 0, 0, 0 };
         Rectangle friendNextBtnRect = { 0, 0, 0, 0 };  // 下一个伙伴按钮
     bool skillAnimActive = false;
@@ -203,12 +275,30 @@ struct UIState {
         // ---- 招募界面 ----
     bool recruitShowResult = false;   // 是否全屏显示招募结果
     float recruitResultTimer = 0.0f;  // 结果展示计时
-    int recruitCardCount = 0;         // 招募卡数量
+        int recruitCardCount = 0;         // 招募卡数量
 
-    // ---- 敌人（老鼠）攻击动画 ----
+    // ---- 陈尔愿招募相关 ----
+    bool hasChenErYuan = false;       // 是否已招募到"陈尔愿"
+    bool showNewFighterHint = false;  // 主界面提示招募到新伙伴
+
+        // ---- 敌人（老鼠）攻击动画 ----
     bool mouseAnimActive = false;
     int mouseAnimFrame = 0;
     float mouseAnimTimer = 0.0f;
     float mouseAnimDuration = 1.5f;
     MouseAnimPayload mousePayload;
+
+        // ---- 存档/读档 ----
+    bool showSaveDlg = false;          // 是否显示存档确认弹窗
+    bool showLoadDlg = false;          // 是否显示读档确认弹窗
+    char saveDlgMsg[128] = {};         // 存档弹窗提示文本
+    float saveDlgTimer = 0.0f;         // 提示弹窗显示计时（秒）
+    float loadDlgTimer = 0.0f;         // 读档弹窗显示计时
+
+    // ---- 新存档按钮 ----
+    Rectangle newGameBtnRect = { 0, 0, 0, 0 };
+    bool showNewGameDlg = false;       // 是否显示新建存档确认弹窗
+
+    // ---- C 区战斗 ----
+    CZoneBattleState cZone;
 };

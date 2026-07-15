@@ -3,6 +3,9 @@
 #include <cstdio>
 #include <string>
 
+// 全局点击音效
+Sound g_clickSound = { 0 };
+
 // ============================================================
 // loadAll — 加载字体 + 全部图片
 // ============================================================
@@ -35,9 +38,10 @@ void UIResource::loadAll() {
     story1Tex   = loadTex("resources/interface/story1.png");
     story2Tex   = loadTex("resources/interface/story2.png");
     recruitTex  = loadTex("resources/interface/Recruiting_teammates.png");
-    chenErYuanTex = loadTex("resources/interface/ChenErYuan.png");
+        chenErYuanTex = loadTex("resources/interface/ChenErYuan.png");
     friendsTex  = loadTex("resources/interface/friends.png");
     charFileTex = loadTex("resources/interface/character_file.png");
+    getCHENTex  = loadTex("resources/interface/getCHEN.png");
 
     // 加载子地图（带 fallback 路径）
     auto loadTexWithFallback = [](const char* path, const char* fallback) -> Texture2D {
@@ -62,7 +66,7 @@ void UIResource::loadAll() {
     playerTex = loadTexWithFallback("All_resources/role/machine_character/Q03.png", "resources/All_resources/role/machine_character/Q03.png");
     enemyTex  = loadTexWithFallback("All_resources/role/enemy/boss_mouse.png", "resources/All_resources/role/enemy/boss_mouse.png");
 
-    // 四个技能按钮图片
+        // 四个技能按钮图片（机械学院）
     const char* btnFiles[] = { "normal_attack.png", "1.png", "2.png", "big.png" };
     for (int i = 0; i < 4; i++) {
         std::string fp = std::string("All_resources/battle/Mech/mech_button/") + btnFiles[i];
@@ -72,6 +76,19 @@ void UIResource::loadAll() {
             img = LoadImage(alt.c_str());
         }
         btnTex[i] = LoadTextureFromImage(img);
+        UnloadImage(img);
+    }
+
+    // 四个技能按钮图片（能源学院 - fire_button）
+    const char* energyBtnFiles[] = { "normal_attack.png", "1.png", "2.png", "big.png" };
+    for (int i = 0; i < 4; i++) {
+        std::string fp = std::string("All_resources/battle/Energy/fire_button/") + energyBtnFiles[i];
+        Image img = LoadImage(fp.c_str());
+        if (!img.data) {
+            std::string alt = "resources/" + fp;
+            img = LoadImage(alt.c_str());
+        }
+        energyBtnTex[i] = LoadTextureFromImage(img);
         UnloadImage(img);
     }
 
@@ -91,7 +108,7 @@ void UIResource::loadAll() {
         }
     }
 
-    // 加载敌人（老鼠）攻击精灵动画帧
+        // 加载敌人（老鼠）攻击精灵动画帧
     for (int i = 0; i < MOUSE_FRAMES; i++) {
         char path[128];
         snprintf(path, sizeof(path), "All_resources/battle/monster/mouse/%03d.png", i + 1);
@@ -103,6 +120,12 @@ void UIResource::loadAll() {
         mouseFrames[i] = LoadTextureFromImage(img);
         UnloadImage(img);
     }
+
+    // 角色Q版图（装备选择弹窗用）
+    machineCharTex = loadTexWithFallback("All_resources/role/machine_character/Q03.png",
+        "resources/All_resources/role/machine_character/Q03.png");
+    energyCharTex = loadTexWithFallback("All_resources/role/energy_character/Q04.png",
+        "resources/All_resources/role/energy_character/Q04.png");
 }
 
 // ============================================================
@@ -127,9 +150,10 @@ void UIResource::unloadAll() {
     unloadTex(story1Tex);
     unloadTex(story2Tex);
     unloadTex(recruitTex);
-    unloadTex(chenErYuanTex);
+        unloadTex(chenErYuanTex);
     unloadTex(friendsTex);
     unloadTex(charFileTex);
+    unloadTex(getCHENTex);
     unloadTex(mapSubTex);
     unloadTex(mapSubBTex);
     unloadTex(mapSubCTex);
@@ -139,10 +163,14 @@ void UIResource::unloadAll() {
     unloadTex(enemyTex);
 
     for (int i = 0; i < 4; i++) unloadTex(btnTex[i]);
+    for (int i = 0; i < 4; i++) unloadTex(energyBtnTex[i]);
 
     for (int s = 0; s < SKILL_COUNT; s++)
         for (int f = 0; f < SKILL_FRAMES; f++)
             unloadTex(skillAnimFrames[s][f]);
 
     for (int i = 0; i < MOUSE_FRAMES; i++) unloadTex(mouseFrames[i]);
+
+    unloadTex(machineCharTex);
+    unloadTex(energyCharTex);
 }

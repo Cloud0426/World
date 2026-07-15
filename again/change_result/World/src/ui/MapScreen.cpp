@@ -1,4 +1,5 @@
 #include "SplashScreen.h"
+#include "MapScreen.h"
 #include "UIShared.h"
 #include "UIHelper.h"
 #include "UIResource.h"
@@ -11,8 +12,6 @@
 // ============================================================
 void RenderMapScreen(UIResource& res, int curW, int curH) {
     DrawImageCentered(res.mapTex, curW, curH);
-    Color purpleGrid = { 180, 0, 255, 120 };
-    DrawCoordGrid(res.mapTex, curW, curH, purpleGrid);
 }
 
 // ============================================================
@@ -54,11 +53,8 @@ void RenderMapSubScreen(UIResource& res, int curW, int curH) {
 // 绘制 B 区子地图
 // ============================================================
 void RenderMapSub2Screen(UIResource& res, UIState& state, int curW, int curH) {
-    ClearBackground(BLACK);
+        ClearBackground(BLACK);
     DrawImageFillScreen(res.mapSubBTex, curW, curH);
-    // 绘制黄色坐标系
-    Color yellowGrid = { 255, 255, 0, 150 };
-    DrawCoordGrid(res.mapSubBTex, curW, curH, yellowGrid);
     // 如果showPeaceInB为true，在屏幕下方显示peace图片
     if (state.showPeaceInB) {
         float imgW = (float)res.peaceTex.width;
@@ -106,12 +102,12 @@ void HandleMapSub2ScreenInput(UIResource& res, UIState& state, GameManager* game
                 if (!pDefaultFighter) {
                     pDefaultFighter = new Combatant("钟关白", "机械学院");
                 }
-                pDefaultFighter->setHp(900);
+                                pDefaultFighter->setHp(900);
                 pDefaultFighter->setMaxHp(900);
                 pDefaultFighter->setAttack(300);
                 pDefaultFighter->setDefense(200);
                 pDefaultFighter->setMaxMp(100);
-                pDefaultFighter->setMp(0);
+                pDefaultFighter->setMp(100);  // 满蓝开局
                 pDefaultFighter->setCritRate(0.10);
                 state.battlePlayer = pDefaultFighter;
             }
@@ -152,6 +148,24 @@ void HandleMapSub2ScreenInput(UIResource& res, UIState& state, GameManager* game
 // 绘制 C 区子地图
 // ============================================================
 void RenderMapSub3Screen(UIResource& res, int curW, int curH) {
-    ClearBackground(BLACK);
+        ClearBackground(BLACK);
     DrawImageFillScreen(res.mapSubCTex, curW, curH);
+}
+
+// ============================================================
+// 处理 C 区子地图输入
+// ============================================================
+void HandleMapSub3ScreenInput(UIResource& res, UIState& state, GameManager* game, int curW, int curH) {
+    Vector2 mousePos = GetMousePosition();
+
+    // 点击区域：设计坐标 竖着100-300，横着700-900
+    Vector2 c1 = DesignToScreen(700.0f, 100.0f, res.mapSubCTex, curW, curH);
+    Vector2 c2 = DesignToScreen(900.0f, 300.0f, res.mapSubCTex, curW, curH);
+
+    if (HitTestRect(mousePos, c1.x, c1.y, c2.x - c1.x, c2.y - c1.y)) {
+        InitCZoneBattle(state, game);
+        state.screenState = SCREEN_CZONE_BATTLE;
+    } else {
+        state.screenState = SCREEN_MAP;
+    }
 }
